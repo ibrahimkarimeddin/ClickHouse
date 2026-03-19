@@ -303,6 +303,50 @@ ASTPtr makeBetweenOperator(bool negative, ASTs arguments)
     return makeASTOperator("and", f_left_expr, f_right_expr);
 }
 
+ASTPtr makeTruthValuePredicateOperator(std::string_view predicate_name, const ASTPtr & argument)
+{
+    auto equals_true = [&]
+    {
+        return makeASTOperator("equals", argument->clone(), make_intrusive<ASTLiteral>(true));
+    };
+
+    auto equals_false = [&]
+    {
+        return makeASTOperator("equals", argument->clone(), make_intrusive<ASTLiteral>(false));
+    };
+
+    auto is_null = [&]
+    {
+        return makeASTOperator("isNull", argument->clone());
+    };
+
+    auto is_not_null = [&]
+    {
+        return makeASTOperator("isNotNull", argument->clone());
+    };
+
+    if (predicate_name == "isTruePredicate")
+        return makeASTOperator("and", equals_true(), is_not_null());
+
+    if (predicate_name == "isFalsePredicate")
+        return makeASTOperator("and", equals_false(), is_not_null());
+
+    if (predicate_name == "isUnknownPredicate")
+        return is_null();
+
+    if (predicate_name == "isNotTruePredicate")
+        return makeASTOperator("or", is_null(), equals_false());
+
+    if (predicate_name == "isNotFalsePredicate")
+        return makeASTOperator("or", is_null(), equals_true());
+
+    if (predicate_name == "isNotUnknownPredicate")
+        return is_not_null();
+
+    return {};
+}
+
+
 ParserExpressionWithOptionalAlias::ParserExpressionWithOptionalAlias(bool allow_alias_without_as_keyword, bool is_table_function, bool allow_trailing_commas)
     : impl(std::make_unique<ParserWithOptionalAlias>(
         is_table_function ? ParserPtr(std::make_unique<ParserTableFunctionExpression>()) : ParserPtr(std::make_unique<ParserExpression>(allow_trailing_commas)),
@@ -485,6 +529,7 @@ enum class OperatorType : uint8_t
     ArrayElement,
     TupleElement,
     IsNull,
+    IsTruthValue,
     StartBetween,
     StartNotBetween,
     FinishBetween,
@@ -2557,6 +2602,12 @@ const std::vector<std::pair<std::string_view, Operator>> ParserExpressionImpl::o
     {toStringView(Keyword::AND),           Operator("and",             4,  2, OperatorType::Mergeable)},
     {toStringView(Keyword::IS_NOT_DISTINCT_FROM), Operator("isNotDistinctFrom", 6, 2)},
     {toStringView(Keyword::IS_DISTINCT_FROM), Operator("isDistinctFrom", 6, 2)},
+    {toStringView(Keyword::IS_NOT_UNKNOWN), Operator("isNotUnknownPredicate", 6, 1, OperatorType::IsTruthValue)},
+    {toStringView(Keyword::IS_UNKNOWN),    Operator("isUnknownPredicate", 6, 1, OperatorType::IsTruthValue)},
+    {toStringView(Keyword::IS_NOT_FALSE),  Operator("isNotFalsePredicate", 6, 1, OperatorType::IsTruthValue)},
+    {toStringView(Keyword::IS_FALSE),      Operator("isFalsePredicate", 6, 1, OperatorType::IsTruthValue)},
+    {toStringView(Keyword::IS_NOT_TRUE),   Operator("isNotTruePredicate", 6, 1, OperatorType::IsTruthValue)},
+    {toStringView(Keyword::IS_TRUE),       Operator("isTruePredicate", 6, 1, OperatorType::IsTruthValue)},
     {toStringView(Keyword::IS_NULL),       Operator("isNull",          6,  1, OperatorType::IsNull)},
     {toStringView(Keyword::IS_NOT_NULL),   Operator("isNotNull",       6,  1, OperatorType::IsNull)},
     {toStringView(Keyword::BETWEEN),       Operator("",                7,  0, OperatorType::StartBetween)},
@@ -2999,7 +3050,20 @@ Action ParserExpressionImpl::tryParseOperator(Layers & layers, IParser::Pos & po
         layers.back()->pushOperand(std::move(function));
         return Action::OPERATOR;
     }
+    if (op.type == OperatorType::IsTruthValue)
+    {
+        ASTPtr argument;
+        if (!layers.back()->popOperand(argument))
+            return Action::NONE;
 
+        ASTPtr function = makeTruthValuePredicateOperator(op.function_name, argument);
+        if (!function)
+            return Action::NONE;
+
+        layers.back()->pushOperand(std::move(function));
+        return Action::OPERATOR;
+    }
+    
     layers.back()->pushOperator(op);
 
     if (op.type == OperatorType::Cast)
