@@ -305,40 +305,50 @@ ASTPtr makeBetweenOperator(bool negative, ASTs arguments)
 
 ASTPtr makeTruthValuePredicateOperator(std::string_view predicate_name, const ASTPtr & argument)
 {
-    auto equals_true = [&]
+    auto is_not_distinct_from_true = [&]
     {
-        return makeASTOperator("equals", argument->clone(), make_intrusive<ASTLiteral>(true));
+        return makeASTOperator("isNotDistinctFrom", argument, make_intrusive<ASTLiteral>(true));
     };
 
-    auto equals_false = [&]
+    auto is_not_distinct_from_false = [&]
     {
-        return makeASTOperator("equals", argument->clone(), make_intrusive<ASTLiteral>(false));
+        return makeASTOperator("isNotDistinctFrom", argument, make_intrusive<ASTLiteral>(false));
     };
 
     auto is_null = [&]
     {
-        return makeASTOperator("isNull", argument->clone());
+        return makeASTOperator("isNull", argument);
     };
 
     auto is_not_null = [&]
     {
-        return makeASTOperator("isNotNull", argument->clone());
+        return makeASTOperator("isNotNull", argument);
+    };
+
+    auto is_distinct_from_true = [&]
+    {
+        return makeASTOperator("isDistinctFrom", argument, make_intrusive<ASTLiteral>(true));
+    };
+
+    auto is_distinct_from_false = [&]
+    {
+        return makeASTOperator("isDistinctFrom", argument, make_intrusive<ASTLiteral>(false));
     };
 
     if (predicate_name == "isTruePredicate")
-        return makeASTOperator("and", equals_true(), is_not_null());
+        return is_not_distinct_from_true();
 
     if (predicate_name == "isFalsePredicate")
-        return makeASTOperator("and", equals_false(), is_not_null());
+        return is_not_distinct_from_false();
 
     if (predicate_name == "isUnknownPredicate")
         return is_null();
 
     if (predicate_name == "isNotTruePredicate")
-        return makeASTOperator("or", is_null(), equals_false());
+        return is_distinct_from_true();
 
     if (predicate_name == "isNotFalsePredicate")
-        return makeASTOperator("or", is_null(), equals_true());
+        return is_distinct_from_false();
 
     if (predicate_name == "isNotUnknownPredicate")
         return is_not_null();
@@ -3063,7 +3073,6 @@ Action ParserExpressionImpl::tryParseOperator(Layers & layers, IParser::Pos & po
         layers.back()->pushOperand(std::move(function));
         return Action::OPERATOR;
     }
-    
     layers.back()->pushOperator(op);
 
     if (op.type == OperatorType::Cast)
