@@ -432,7 +432,7 @@ Can be optimized by enabling the [optimize_functions_to_subcolumns](/operations/
 ## Checking Boolean Values {#checking-boolean-values}
 
 ClickHouse supports the `IS TRUE`, `IS FALSE`, `IS UNKNOWN`, `IS NOT TRUE`, `IS NOT FALSE`, and `IS NOT UNKNOWN` operators.
-They are used with [Bool](/sql-reference/data-types/boolean.md) and `Nullable(Bool)` expressions.
+They are used with [Bool](../../sql-reference/data-types/boolean.md) and `Nullable(Bool)` expressions.
 
 
 - `expr IS TRUE` returns `1` only if `expr` is `true`.
